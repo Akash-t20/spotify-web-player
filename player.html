@@ -1,84 +1,79 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Spotify Web Playback SDK Quick Start</title>
+    <title>Spotify Player</title>
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
 <body>
-<h1>Spotify Web Playback SDK Quick Start</h1>
-<button id="togglePlay">Toggle Play</button>
-<div id="status">Initializing...</div>
+<h1>Spotify Player</h1>
+<div id="status">Loading...</div>
+<button onclick="playPause()">Play/Pause</button>
+<button onclick="next()">Next</button>
+<button onclick="previous()">Previous</button>
 
-<script src="https://sdk.scdn.co/spotify-player.js"></script>
 <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('access_token');  // Get access token from URL
+
+    let device_id = '';
+    let player;
+
     window.onSpotifyWebPlaybackSDKReady = () => {
-        const token = new URLSearchParams(window.location.search).get("access_token");
-
-        if (!token) {
-            document.getElementById('status').innerText = 'Access token missing!';
-            return;
-        }
-
-        const player = new Spotify.Player({
-            name: 'Web Playback SDK Quick Start Player',
+        player = new Spotify.Player({
+            name: 'My Android Web Player',
             getOAuthToken: cb => { cb(token); },
             volume: 0.5
         });
 
-        // Required for mobile playback
-        document.body.addEventListener('click', () => {
-            player.activateElement().then(() => {
-                console.log("Playback activated");
+        player.addListener('ready', ({ device_id: id }) => {
+            device_id = id;
+            document.getElementById('status').innerText = "Player ready: " + device_id;
+
+            // Auto-play a test track
+            fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                    uris: ["spotify:track:7ouMYWpwJ422jRcDASZB7P"]  // Replace this with your song URI
+                }),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                }
             });
-        });
-
-        // Event listeners
-        player.addListener('ready', ({ device_id }) => {
-            console.log('Ready with Device ID', device_id);
-            document.getElementById('status').innerText = 'Ready! Device ID: ' + device_id;
-
-            // Notify Android (if in WebView)
-            if (window.AndroidInterface && typeof window.AndroidInterface.onPlayerReady === 'function') {
-                window.AndroidInterface.onPlayerReady(device_id);
-            }
         });
 
         player.addListener('not_ready', ({ device_id }) => {
-            console.log('Device ID has gone offline', device_id);
-            document.getElementById('status').innerText = 'Player offline';
+            document.getElementById('status').innerText = "Player not ready: " + device_id;
         });
 
         player.addListener('initialization_error', ({ message }) => {
-            console.error('Init error:', message);
+            console.error('Initialization Error:', message);
         });
-
         player.addListener('authentication_error', ({ message }) => {
-            console.error('Auth error:', message);
-            document.getElementById('status').innerText = 'Auth error';
+            console.error('Authentication Error:', message);
         });
-
         player.addListener('account_error', ({ message }) => {
-            console.error('Account error:', message);
-            document.getElementById('status').innerText = 'Account error';
+            console.error('Account Error:', message);
+        });
+        player.addListener('playback_error', ({ message }) => {
+            console.error('Playback Error:', message);
         });
 
-        document.getElementById('togglePlay').onclick = () => {
-            player.togglePlay().then(() => {
-                console.log("Toggled play");
-            }).catch(err => {
-                console.error("Play error:", err);
-                document.getElementById('status').innerText = 'Playback error';
-            });
-        };
-
-        player.connect().then(success => {
-            if (success) {
-                console.log("Web Playback SDK connected!");
-                document.getElementById('status').innerText = 'Connecting to Spotify...';
-            } else {
-                document.getElementById('status').innerText = 'Connection failed.';
-            }
-        });
+        player.connect();
+        window.player = player;
     };
+
+    function playPause() {
+        if (player) player.togglePlay();
+    }
+
+    function next() {
+        if (player) player.nextTrack();
+    }
+
+    function previous() {
+        if (player) player.previousTrack();
+    }
 </script>
 </body>
 </html>

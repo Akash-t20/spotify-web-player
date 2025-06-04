@@ -7,9 +7,10 @@
 <body>
 <h1>Spotify Player</h1>
 <div id="status">Loading...</div>
-<button onclick="playPause()">Play/Pause</button>
-<button onclick="next()">Next</button>
-<button onclick="previous()">Previous</button>
+<button id="playPauseBtn" onclick="playPause()" disabled>Play/Pause</button>
+<button id="nextBtn" onclick="next()" disabled>Next</button>
+<button id="prevBtn" onclick="previous()" disabled>Previous</button>
+
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
@@ -17,6 +18,7 @@
 
     let device_id = '';
     let player;
+    let playbackLoaded = false;
 
     window.onSpotifyWebPlaybackSDKReady = () => {
         player = new Spotify.Player({
@@ -25,23 +27,30 @@
             volume: 0.5
         });
 
-        player.addListener('ready', ({ device_id: id }) => {
-            device_id = id;
-            document.getElementById('status').innerText = "Player ready: " + device_id;
+      player.addListener('ready', ({ device_id: id }) => {
+    device_id = id;
+    document.getElementById('status').innerText = "Player ready: " + device_id;
 
-            // Auto-play a test track
-            fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, {
-                method: "PUT",
-                body: JSON.stringify({
-                    uris: ["spotify:track:7ouMYWpwJ422jRcDASZB7P"]  // Replace this with your song URI
-                }),
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                }
-            });
-        });
-
+    // Start playback on device and mark loaded true after success
+    fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+            uris: ["spotify:track:7ouMYWpwJ422jRcDASZB7P"]  // Replace URI
+        }),
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+        }
+    }).then(response => {
+    if (response.ok) {
+        playbackLoaded = true;
+        document.getElementById('playPauseBtn').disabled = false;
+        document.getElementById('nextBtn').disabled = false;
+        document.getElementById('prevBtn').disabled = false;
+    } else {
+        console.error('Failed to start playback:', response.statusText);
+    }
+});
         player.addListener('not_ready', ({ device_id }) => {
             document.getElementById('status').innerText = "Player not ready: " + device_id;
         });
@@ -62,18 +71,30 @@
         player.connect();
         window.player = player;
     };
-
-    function playPause() {
-        if (player) player.togglePlay();
+function playPause() {
+    if (player && playbackLoaded) {
+        player.togglePlay();
+    } else {
+        alert('Playback not ready yet. Please wait.');
     }
+}
 
-    function next() {
-        if (player) player.nextTrack();
+function next() {
+    if (player && playbackLoaded) {
+        player.nextTrack();
+    } else {
+        alert('Playback not ready yet. Please wait.');
     }
+}
 
-    function previous() {
-        if (player) player.previousTrack();
+function previous() {
+    if (player && playbackLoaded) {
+        player.previousTrack();
+    } else {
+        alert('Playback not ready yet. Please wait.');
     }
+}
+
 </script>
 </body>
 </html>

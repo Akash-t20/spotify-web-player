@@ -1,107 +1,82 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Spotify Web Player</title>
-  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <title>Spotify Web Player</title>
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
 <body>
-  <h2>Spotify Web Player</h2>
-  <p id="status">Loading Web Playback SDK...</p>
-  <button id="playPauseBtn" disabled onclick="togglePlay()">Play/Pause</button>
-  <button id="nextBtn" disabled onclick="nextTrack()">Next</button>
-  <button id="prevBtn" disabled onclick="prevTrack()">Previous</button>
+<h2>Spotify Web Player</h2>
 
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('access_token');
-    let deviceId = null;
-    let player = null;
-    let controlsEnabled = false;
+<input id="searchBox" placeholder="Search for songs" />
+<button onclick="searchSongs()">Search</button>
+<div id="results"></div>
 
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      player = new Spotify.Player({
-        name: 'Android Web Player',
+<script>
+const token = new URLSearchParams(window.location.search).get('access_token');
+let player;
+let device_id = '';
+
+window.onSpotifyWebPlaybackSDKReady = () => {
+    player = new Spotify.Player({
+        name: 'Web Playback SDK Player',
         getOAuthToken: cb => cb(token),
-        volume: 0.8
-      });
+        volume: 0.5
+    });
 
-      player.addListener('ready', ({ device_id }) => {
-        deviceId = device_id;
-        document.getElementById('status').innerText = "✅ Player ready: " + deviceId;
-        console.log("✅ Player Ready:", deviceId);
+    player.addListener('ready', ({ device_id: id }) => {
+        device_id = id;
+        console.log("Device Ready:", id);
 
-        if (window.AndroidInterface && AndroidInterface.onPlayerReady) {
-          AndroidInterface.onPlayerReady(deviceId);
+        // Send back to Android if needed
+        if (window.AndroidInterface) {
+            window.AndroidInterface.onPlayerReady(device_id);
         }
+    });
 
-        startPlayback();
-      });
+    player.addListener('initialization_error', e => console.error(e));
+    player.addListener('authentication_error', e => console.error(e));
+    player.addListener('account_error', e => console.error(e));
+    player.addListener('playback_error', e => console.error(e));
 
-      player.addListener('not_ready', ({ device_id }) => {
-        document.getElementById('status').innerText = "❌ Player not ready: " + device_id;
-        console.warn("Player not ready:", device_id);
-      });
+    player.connect();
+};
 
-      player.addListener('initialization_error', e => {
-        console.error("Initialization error:", e.message);
-      });
+function searchSongs() {
+    const query = document.getElementById("searchBox").value;
+    if (!query) return;
 
-      player.addListener('authentication_error', e => {
-        console.error("Authentication error:", e.message);
-      });
+    fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=5`, {
+        headers: { 'Authorization': 'Bearer ' + token }
+    })
+    .then(res => res.json())
+    .then(data => {
+        const resultsDiv = document.getElementById("results");
+        resultsDiv.innerHTML = '';
 
-      player.addListener('account_error', e => {
-        console.error("Account error:", e.message);
-      });
+        data.tracks.items.forEach(track => {
+            const div = document.createElement("div");
+            div.innerHTML = `
+                <p><b>${track.name}</b> by ${track.artists.map(a => a.name).join(", ")}</p>
+                <button onclick="play('${track.uri}')">Play</button>
+                <hr/>
+            `;
+            resultsDiv.appendChild(div);
+        });
+    });
+}
 
-      player.addListener('playback_error', e => {
-        console.error("Playback error:", e.message);
-      });
-
-      player.connect();
-      window.player = player;
-    };
-
-    function startPlayback() {
-      fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+function play(uri) {
+    fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, {
         method: "PUT",
+        body: JSON.stringify({ uris: [uri] }),
         headers: {
-          'Authorization': 'Bearer ' + token,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          uris: ["spotify:track:7ouMYWpwJ422jRcDASZB7P"] // your default song
-        })
-      }).then(res => {
-        if (res.ok) {
-          document.getElementById('status').innerText = "🎵 Playing";
-          enableControls();
-        } else {
-          console.error("Playback failed:", res.statusText);
-          document.getElementById('status').innerText = "❌ Failed to play";
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
         }
-      });
-    }
-
-    function enableControls() {
-      controlsEnabled = true;
-      ['playPauseBtn', 'nextBtn', 'prevBtn'].forEach(id => {
-        document.getElementById(id).disabled = false;
-      });
-    }
-
-    function togglePlay() {
-      if (controlsEnabled) player.togglePlay();
-    }
-
-    function nextTrack() {
-      if (controlsEnabled) player.nextTrack();
-    }
-
-    function prevTrack() {
-      if (controlsEnabled) player.previousTrack();
-    }
-  </script>
+    }).then(res => {
+        if (!res.ok) console.error("Play failed:", res.status);
+    });
+}
+</script>
 </body>
 </html>

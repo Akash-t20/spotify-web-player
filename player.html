@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spotify Player</title>
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background: #121212;
+            color: white;
+        }
+
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+
+        #status {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<h1>Spotify Web Playback</h1>
+<div id="status">Loading Spotify SDK...</div>
+<button onclick="togglePlay()">Play/Pause</button>
+<button onclick="next()">Next</button>
+<button onclick="previous()">Previous</button>
+
+<script>
+    let player;
+    let deviceId = null;
+
+    function getAccessToken() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('access_token');
+    }
+
+    window.onSpotifyWebPlaybackSDKReady = () => {
+        const token = getAccessToken();
+
+        if (!token) {
+            document.getElementById('status').innerText = 'Access token missing!';
+            return;
+        }
+
+        console.log('Initializing Spotify Web Playback SDK...');
+        player = new Spotify.Player({
+            name: 'My Android Web Player',
+            getOAuthToken: cb => cb(token),
+            volume: 0.8
+        });
+
+        // Ready
+        player.addListener('ready', ({ device_id }) => {
+            console.log('Player is ready with device ID:', device_id);
+            document.getElementById("status").innerText = "Player Ready! Device ID: " + device_id;
+            deviceId = device_id;
+
+            // Notify Android interface if available
+            if (window.AndroidInterface && typeof window.AndroidInterface.onPlayerReady === 'function') {
+                window.AndroidInterface.onPlayerReady(device_id);
+            } else {
+                console.warn("AndroidInterface.onPlayerReady not available.");
+            }
+        });
+
+        // Not Ready
+        player.addListener('not_ready', ({ device_id }) => {
+            console.warn('Player went offline:', device_id);
+            document.getElementById("status").innerText = "Player not ready";
+        });
+
+        // Errors
+        player.addListener('initialization_error', ({ message }) => {
+            console.error('Init error:', message);
+        });
+
+        player.addListener('authentication_error', ({ message }) => {
+            console.error('Auth error:', message);
+            document.getElementById("status").innerText = "Authentication error";
+        });
+
+        player.addListener('account_error', ({ message }) => {
+            console.error('Account error:', message);
+            document.getElementById("status").innerText = "Account error (premium required)";
+        });
+
+        player.addListener('playback_error', ({ message }) => {
+            console.error('Playback error:', message);
+            document.getElementById("status").innerText = "Playback error";
+        });
+
+        player.connect().then(success => {
+            if (success) {
+                console.log('Web Playback SDK connected successfully');
+                document.getElementById("status").innerText = "Connecting to Spotify...";
+            } else {
+                document.getElementById("status").innerText = "Failed to connect to Spotify";
+            }
+        });
+    };
+
+    function togglePlay() {
+        if (player) {
+            player.togglePlay().then(() => {
+                console.log("Toggled playback");
+            }).catch(err => console.error("TogglePlay error", err));
+        }
+    }
+
+    function next() {
+        if (player) {
+            player.nextTrack().then(() => {
+                console.log("Skipped to next track");
+            }).catch(err => console.error("NextTrack error", err));
+        }
+    }
+
+    function previous() {
+        if (player) {
+            player.previousTrack().then(() => {
+                console.log("Went to previous track");
+            }).catch(err => console.error("PreviousTrack error", err));
+        }
+    }
+</script>
+</body>
+</html>

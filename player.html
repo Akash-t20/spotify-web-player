@@ -1,115 +1,107 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Spotify Player</title>
-    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <meta charset="UTF-8" />
+  <title>Spotify Web Player</title>
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
 </head>
 <body>
-<h1>Spotify Player</h1>
-<div id="status">Loading...</div>
-<button id="playPauseBtn" onclick="playPause()" disabled>Play/Pause</button>
-<button id="nextBtn" onclick="next()" disabled>Next</button>
-<button id="prevBtn" onclick="previous()" disabled>Previous</button>
+  <h2>Spotify Web Player</h2>
+  <p id="status">Loading Web Playback SDK...</p>
+  <button id="playPauseBtn" disabled onclick="togglePlay()">Play/Pause</button>
+  <button id="nextBtn" disabled onclick="nextTrack()">Next</button>
+  <button id="prevBtn" disabled onclick="prevTrack()">Previous</button>
 
-<script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('access_token');  // Get access token from URL
-
-    let device_id = '';
-    let player;
-    let playbackLoaded = false;
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('access_token');
+    let deviceId = null;
+    let player = null;
+    let controlsEnabled = false;
 
     window.onSpotifyWebPlaybackSDKReady = () => {
-        player = new Spotify.Player({
-            name: 'My Android Web Player',
-            getOAuthToken: cb => { cb(token); },
-            volume: 0.5
-        });
+      player = new Spotify.Player({
+        name: 'Android Web Player',
+        getOAuthToken: cb => cb(token),
+        volume: 0.8
+      });
 
-        player.addListener('ready', ({ device_id: id }) => {
-            device_id = id;
-            console.log("✅ Player ready with device_id:", device_id);
-            document.getElementById('status').innerText = "Player ready: " + device_id;
+      player.addListener('ready', ({ device_id }) => {
+        deviceId = device_id;
+        document.getElementById('status').innerText = "✅ Player ready: " + deviceId;
+        console.log("✅ Player Ready:", deviceId);
 
-            // 🔁 Inform Android app via JS interface
-            if (window.AndroidInterface && AndroidInterface.onPlayerReady) {
-                console.log("📡 Sending device_id to AndroidInterface...");
-                AndroidInterface.onPlayerReady(device_id);
-            } else {
-                console.log("⚠️ AndroidInterface.onPlayerReady is not available");
-            }
+        if (window.AndroidInterface && AndroidInterface.onPlayerReady) {
+          AndroidInterface.onPlayerReady(deviceId);
+        }
 
-            // Start playback
-            fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, {
-                method: "PUT",
-                body: JSON.stringify({
-                    uris: ["spotify:track:7ouMYWpwJ422jRcDASZB7P"]  // Replace URI as needed
-                }),
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                }
-            }).then(response => {
-                if (response.ok) {
-                    console.log("✅ Playback started");
-                    playbackLoaded = true;
-                    document.getElementById('playPauseBtn').disabled = false;
-                    document.getElementById('nextBtn').disabled = false;
-                    document.getElementById('prevBtn').disabled = false;
-                } else {
-                    console.error('❌ Failed to start playback:', response.statusText);
-                }
-            });
-        });
+        startPlayback();
+      });
 
-        player.addListener('not_ready', ({ device_id }) => {
-            document.getElementById('status').innerText = "Player not ready: " + device_id;
-            console.warn("⚠️ Player not ready:", device_id);
-        });
+      player.addListener('not_ready', ({ device_id }) => {
+        document.getElementById('status').innerText = "❌ Player not ready: " + device_id;
+        console.warn("Player not ready:", device_id);
+      });
 
-        player.addListener('initialization_error', ({ message }) => {
-            console.error('❌ Initialization Error:', message);
-        });
+      player.addListener('initialization_error', e => {
+        console.error("Initialization error:", e.message);
+      });
 
-        player.addListener('authentication_error', ({ message }) => {
-            console.error('❌ Authentication Error:', message);
-        });
+      player.addListener('authentication_error', e => {
+        console.error("Authentication error:", e.message);
+      });
 
-        player.addListener('account_error', ({ message }) => {
-            console.error('❌ Account Error:', message);
-        });
+      player.addListener('account_error', e => {
+        console.error("Account error:", e.message);
+      });
 
-        player.addListener('playback_error', ({ message }) => {
-            console.error('❌ Playback Error:', message);
-        });
+      player.addListener('playback_error', e => {
+        console.error("Playback error:", e.message);
+      });
 
-        player.connect();
-        window.player = player;
+      player.connect();
+      window.player = player;
     };
 
-    function playPause() {
-        if (player && playbackLoaded) {
-            player.togglePlay();
+    function startPlayback() {
+      fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: "PUT",
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          uris: ["spotify:track:7ouMYWpwJ422jRcDASZB7P"] // your default song
+        })
+      }).then(res => {
+        if (res.ok) {
+          document.getElementById('status').innerText = "🎵 Playing";
+          enableControls();
         } else {
-            alert('Playback not ready yet. Please wait.');
+          console.error("Playback failed:", res.statusText);
+          document.getElementById('status').innerText = "❌ Failed to play";
         }
+      });
     }
 
-    function next() {
-        if (player && playbackLoaded) {
-            player.nextTrack();
-        } else {
-            alert('Playback not ready yet. Please wait.');
-        }
+    function enableControls() {
+      controlsEnabled = true;
+      ['playPauseBtn', 'nextBtn', 'prevBtn'].forEach(id => {
+        document.getElementById(id).disabled = false;
+      });
     }
 
-    function previous() {
-        if (player && playbackLoaded) {
-            player.previousTrack();
-        } else {
-            alert('Playback not ready yet. Please wait.');
-        }
+    function togglePlay() {
+      if (controlsEnabled) player.togglePlay();
     }
-</script>
+
+    function nextTrack() {
+      if (controlsEnabled) player.nextTrack();
+    }
+
+    function prevTrack() {
+      if (controlsEnabled) player.previousTrack();
+    }
+  </script>
 </body>
 </html>
